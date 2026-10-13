@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>명품 오목 - 전국 오목 선수권 대회</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&display=swap');
+:root {
+  --bg: #0c1a12;
+  --panel: #13261c;
+  --gold: #d4af37;
+  --green: #22c55e;
+  --wood: #c9956b;
+  --text: #f8fafc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background: radial-gradient(circle at top, #1a3a2a, #0c1a12);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+}
+.header {
+  width: 100%;
+  max-width: 720px;
+  background: linear-gradient(135deg, #0f2419, #1a3a2a);
+  border: 1px solid #2d5a3d;
+  border-radius: 20px;
+  padding: 14px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+.rank-badge {
+  background: linear-gradient(90deg, #a16207, #d4af37);
+  color: #1a1a1a;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 1.05em;
+  letter-spacing: 0.5px;
+}
+.container { width: 100%; max-width: 720px; }
+.screen { display: none; flex-direction: column; align-items: center; gap: 18px; }
+.screen.active { display: flex; }
+h1, h2 { font-weight: 700; letter-spacing: -0.5px; }
+.rooms { display: grid; grid-template-columns: 1fr; gap: 12px; width: 100%; }
+@media (min-width: 500px) { .rooms { grid-template-columns: 1fr 1fr 1fr; } }
+.room-btn {
+  background: linear-gradient(145deg, #14532d, #166534);
+  border: 1px solid #4ade80;
+  color: white;
+  padding: 22px 16px;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 1.05em;
+  font-weight: 600;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.room-btn:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(34,197,94,0.3); }
+.board-wrap {
+  background: linear-gradient(145deg, #5c4033, #3f2a1d);
+  padding: 16px;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  position: relative;
+}
+canvas {
+  background: #c9956b;
+  border-radius: 6px;
+  cursor: pointer;
+  display: block;
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+  touch-action: none;
+}
+.controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+button {
+  background: #166534;
+  color: white;
+  border: none;
+  padding: 11px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95em;
+  transition: background 0.15s;
+}
+button:hover { background: #22c55e; }
+.status {
+  font-size: 1.25em;
+  font-weight: 600;
+  text-align: center;
+  min-height: 1.6em;
+  padding: 8px 16px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 12px;
+  width: 100%;
+}
+.thinking { color: #fbbf24; }
+.log {
+  background: rgba(15,36,25,0.8);
+  padding: 10px 14px;
+  border-radius: 10px;
+  max-height: 100px;
+  overflow-y: auto;
+  width: 100%;
+  font-size: 0.85em;
+  border: 1px solid #2d5a3d;
+}
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+  display: none; align-items: center; justify-content: center; z-index: 100;
+  backdrop-filter: blur(4px);
+}
+.modal.show { display: flex; }
+.modal-content {
+  background: linear-gradient(145deg, #13261c, #1a3a2a);
+  padding: 28px;
+  border-radius: 20px;
+  text-align: center;
+  border: 2px solid #d4af37;
+  max-width: 380px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+.slider-wrap { display: flex; align-items: center; gap: 8px; font-size: 0.9em; }
+input[type=range] { width: 120px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <h2>전국 오목 선수권</h2>
+    <small style="opacity:0.7">명품 대국 · 한 수씩</small>
+  </div>
+  <div class="rank-badge" id="rankDisplay">초급 15급</div>
+  <div style="text-align:right">점수<br><strong id="scoreDisplay">0</strong></div>
+</div>
+
+<div class="container">
+  <div class="screen active" id="lobby">
+    <h1 style="text-align:center; margin-bottom:8px;">대국 선택</h1>
+    <div class="rooms">
+      <button class="room-btn" onclick="startGame(9,'easy')">초급 방<br><small>9×9 · 로봇 A</small></button>
+      <button class="room-btn" onclick="startGame(13,'medium')">중급 방<br><small>13×13 · 로봇 A/B</small></button>
+      <button class="room-btn" onclick="startGame(15,'hard')">전국대회<br><small>15×15 · 로봇 B</small></button>
+    </div>
+    <p style="text-align:center; opacity:0.75; font-size:0.95em; line-height:1.6;">
+      로봇은 반드시 <strong>한 수씩</strong>만 둡니다.<br>
+      생각 시간을 조절해 자연스러운 대국을 즐기세요.
+    </p>
+  </div>
+
+  <div class="screen" id="gameScreen">
+    <div class="status" id="status">흑(당신) 차례</div>
+    <div class="board-wrap">
+      <canvas id="board"></canvas>
+    </div>
+    <div class="controls">
+      <button onclick="undo()">무르기</button>
+      <button onclick="resign()">기권</button>
+      <button onclick="showLobby()">로비</button>
+    </div>
+    <div class="slider-wrap">
+      AI 생각 시간: <input type="range" id="speed" min="1000" max="4500" value="2200" step="200">
+      <span id="speedLabel">2.2초</span>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<div class="modal" id="resultModal">
+  <div class="modal-content">
+    <h2 id="resultTitle">승리!</h2>
+    <p id="resultMsg" style="margin:12px 0; font-size:1.05em;"></p>
+    <p>현재 등급: <strong id="newRank" style="color:#d4af37"></strong></p>
+    <div style="margin-top:20px; display:flex; gap:10px; justify-content:center;">
+      <button onclick="closeModal(); showLobby();">로비로</button>
+      <button onclick="closeModal(); startGame(currentSize, currentDiff);">한 판 더</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const RANKS = [
+  {name:"초급 18급", min:0}, {name:"초급 15급", min:40}, {name:"초급 12급", min:100},
+  {name:"초급 9급", min:180}, {name:"초급 6급", min:280}, {name:"초급 3급", min:400},
+  {name:"중급 1급", min:540}, {name:"1단", min:720}, {name:"2단", min:920},
+  {name:"3단", min:1150}, {name:"4단", min:1450}, {name:"5단+", min:1800}
+];
+let playerScore = parseInt(localStorage.getItem('omokPremiumScore') || '0');
+let currentSize = 15, currentDiff = 'medium';
+let board = [], size = 15, cell = 36, margin = 24;
+let currentPlayer = 1, gameOver = false, history = [];
+let aiDelay = 2200, aiThinking = false, aiTimeoutId = null;
+let lastMove = null, winLine = null;
+let canvas, ctx;
+
+function getRank(s) {
+  let r = RANKS[0];
+  for (let i = RANKS.length-1; i>=0; i--) if (s >= RANKS[i].min) { r = RANKS[i]; break; }
+  return r;
+}
+function updateRankUI() {
+  const r = getRank(playerScore);
+  document.getElementById('rankDisplay').textContent = r.name;
+  document.getElementById('scoreDisplay').textContent = playerScore;
+}
+updateRankUI();
+
+function initBoard(s) {
+  size = s;
+  cell = Math.min(42, Math.floor(560 / (size-1)));
+  canvas = document.getElementById('board');
+  const dim = margin*2 + cell*(size-1);
+  canvas.width = dim; canvas.height = dim;
+  ctx = canvas.getContext('2d');
+  board = Array.from({length:size}, () => Array(size).fill(0));
+  history = []; lastMove = null; winLine = null;
+  currentPlayer = 1; gameOver = false; aiThinking = false;
+  if (aiTimeoutId) clearTimeout(aiTimeoutId);
+  draw();
+  canvas.onclick = onClick;
+  canvas.ontouchstart = e => { e.preventDefault(); onClick(e.touches[0]); };
+}
+
+function draw() {
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0,0,w,h);
+  // Wood
+  const g = ctx.createLinearGradient(0,0,w,h);
+  g.addColorStop(0,'#d4a574'); g.addColorStop(1,'#b07d4a');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,w,h);
+  // Grid
+  ctx.strokeStyle = '#5c3a21';
+  ctx.lineWidth = 1.2;
+  for (let i=0; i<size; i++) {
+    const p = margin + i*cell;
+    ctx.beginPath(); ctx.moveTo(margin, p); ctx.lineTo(margin+(size-1)*cell, p); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p, margin); ctx.lineTo(p, margin+(size-1)*cell); ctx.stroke();
+  }
+  // Star points
+  const stars = size>=15 ? [3,7,11] : size>=13 ? [3,6,9] : [2,4,6];
+  ctx.fillStyle = '#3f2a1d';
+  stars.forEach(r => stars.forEach(c => {
+    if (r < size && c < size) {
+      ctx.beginPath();
+      ctx.arc(margin+c*cell, margin+r*cell, 3.5, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }));
+  // Stones
+  for (let r=0; r<size; r++) for (let c=0; c<size; c++) if (board[r][c]) drawStone(c,r,board[r][c]);
+  // Last move ring
+  if (lastMove && !winLine) {
+    const [lr,lc] = lastMove;
+    ctx.beginPath();
+    ctx.arc(margin+lc*cell, margin+lr*cell, cell*0.38, 0, Math.PI*2);
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+  // Win line
+  if (winLine) {
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = '#facc15';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    winLine.forEach(([r,c],i) => {
+      const x = margin+c*cell, y = margin+r*cell;
+      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+}
+
+function drawStone(c, r, p) {
+  const x = margin + c*cell, y = margin + r*cell, rad = cell*0.42;
+  ctx.beginPath();
+  ctx.arc(x,y,rad,0,Math.PI*2);
+  if (p===1) {
+    const gr = ctx.createRadialGradient(x-rad*0.35,y-rad*0.35,0,x,y,rad);
+    gr.addColorStop(0,'#666'); gr.addColorStop(1,'#111');
+    ctx.fillStyle = gr;
+  } else {
+    const gr = ctx.createRadialGradient(x-rad*0.35,y-rad*0.35,0,x,y,rad);
+    gr.addColorStop(0,'#fff'); gr.addColorStop(0.6,'#f0f0f0'); gr.addColorStop(1,'#ccc');
+    ctx.fillStyle = gr;
+  }
+  ctx.fill();
+  ctx.strokeStyle = p===1 ? '#000' : '#999';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+function posFromEvent(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+  const x = ((e.clientX||e.pageX) - rect.left) * scaleX;
+  const y = ((e.clientY||e.pageY) - rect.top) * scaleY;
+  const c = Math.round((x - margin) / cell);
+  const r = Math.round((y - margin) / cell);
+  if (r>=0 && r<size && c>=0 && c<size) return [r,c];
+  return null;
+}
+
+function onClick(e) {
+  if (gameOver || currentPlayer !== 1 || aiThinking) return;
+  const pos = posFromEvent(e);
+  if (!pos || board[pos[0]][pos[1]]) return;
+  place(pos[0], pos[1], 1);
+  if (!gameOver) {
+    currentPlayer = 2;
+    aiThinking = true;
+    setStatus('로봇이 한 수를 생각 중...', true);
+    if (aiTimeoutId) clearTimeout(aiTimeoutId);
+    aiTimeoutId = setTimeout(aiMove, aiDelay);
+  }
+}
+
+function place(r, c, p) {
+  board[r][c] = p;
+  history.push([r,c,p]);
+  lastMove = [r,c];
+  draw();
+  const line = getWinLine(r,c,p);
+  if (line) {
+    winLine = line;
+    draw();
+    endGame(p===1 ? 'win' : 'lose');
+    return;
+  }
+  if (history.length >= size*size) endGame('draw');
+}
+
+function getWinLine(r, c, p) {
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (const [dr,dc] of dirs) {
+    let cells = [[r,c]];
+    for (let d=1; d<5; d++) {
+      const nr=r+dr*d, nc=c+dc*d;
+      if (nr<0||nr>=size||nc<0||nc>=size||board[nr][nc]!==p) break;
+      cells.push([nr,nc]);
+    }
+    for (let d=1; d<5; d++) {
+      const nr=r-dr*d, nc=c-dc*d;
+      if (nr<0||nr>=size||nc<0||nc>=size||board[nr][nc]!==p) break;
+      cells.unshift([nr,nc]);
+    }
+    if (cells.length >= 5) return cells.slice(0,5);
+  }
+  return null;
+}
+
+function aiMove() {
+  aiThinking = false;
+  aiTimeoutId = null;
+  if (gameOver || currentPlayer !== 2) return;
+  const moves = getCandidates();
+  if (!moves.length) return;
+  let best = null;
+  // Immediate win
+  for (const [r,c] of moves) {
+    board[r][c]=2;
+    if (getWinLine(r,c,2)) { best=[r,c]; board[r][c]=0; break; }
+    board[r][c]=0;
+  }
+  // Block
+  if (!best) {
+    for (const [r,c] of moves) {
+      board[r][c]=1;
+      if (getWinLine(r,c,1)) { best=[r,c]; board[r][c]=0; break; }
+      board[r][c]=0;
+    }
+  }
+  if (!best) best = moves[Math.floor(Math.random()*Math.min(moves.length, currentDiff==='hard'?6:10))];
+  place(best[0], best[1], 2);
+  log('로봇이 한 수를 두었습니다.');
+  if (!gameOver) {
+    currentPlayer = 1;
+    setStatus('흑(당신) 차례');
+  }
+}
+
+function getCandidates() {
+  const set = new Set();
+  const range = currentDiff==='hard' ? 2 : 1;
+  let has = false;
+  for (let r=0;r<size;r++) for (let c=0;c<size;c++) if (board[r][c]) {
+    has = true;
+    for (let dr=-range;dr<=range;dr++) for (let dc=-range;dc<=range;dc++) {
+      const nr=r+dr, nc=c+dc;
+      if (nr>=0&&nr<size&&nc>=0&&nc<size&&!board[nr][nc]) set.add(nr+','+nc);
+    }
+  }
+  if (!has) set.add(Math.floor(size/2)+','+Math.floor(size/2));
+  return [...set].map(s=>s.split(',').map(Number));
+}
+
+function endGame(result) {
+  gameOver = true;
+  aiThinking = false;
+  let delta = 0, msg = '';
+  if (result==='win') {
+    delta = currentDiff==='easy'?30:currentDiff==='medium'?50:70;
+    msg = `전국대회 승리! +${delta}점`;
+    setStatus('멋진 승리!');
+  } else if (result==='lose') {
+    delta = currentDiff==='easy'?-8:currentDiff==='medium'?-18:-28;
+    msg = `패배 ${delta}점`;
+    setStatus('패배');
+  } else {
+    msg = '무승부';
+    setStatus('무승부');
+  }
+  playerScore = Math.max(0, playerScore + delta);
+  localStorage.setItem('omokPremiumScore', playerScore);
+  updateRankUI();
+  document.getElementById('resultTitle').textContent = result==='win'?'승리!':result==='lose'?'패배':'무승부';
+  document.getElementById('resultMsg').textContent = msg;
+  document.getElementById('newRank').textContent = getRank(playerScore).name;
+  document.getElementById('resultModal').classList.add('show');
+  log(msg);
+}
+
+function setStatus(text, thinking=false) {
+  const el = document.getElementById('status');
+  el.textContent = text;
+  el.className = 'status' + (thinking?' thinking':'');
+}
+function log(t) {
+  const el = document.getElementById('log');
+  el.innerHTML = `<div>${new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})} · ${t}</div>` + el.innerHTML;
+}
+function undo() {
+  if (history.length < 2 || gameOver || aiThinking) return;
+  for (let i=0; i<2 && history.length; i++) {
+    const [r,c] = history.pop();
+    board[r][c] = 0;
+  }
+  lastMove = history.length ? history[history.length-1].slice(0,2) : null;
+  winLine = null;
+  currentPlayer = 1;
+  draw();
+  setStatus('무르기 완료 - 당신 차례');
+}
+function resign() { if (!gameOver) endGame('lose'); }
+function showLobby() {
+  document.getElementById('lobby').classList.add('active');
+  document.getElementById('gameScreen').classList.remove('active');
+}
+function startGame(s, diff) {
+  currentSize = s; currentDiff = diff;
+  document.getElementById('lobby').classList.remove('active');
+  document.getElementById('gameScreen').classList.add('active');
+  initBoard(s);
+  setStatus('흑(당신) 차례 — 전국대회 시작');
+  log(`${s}×${s} ${diff==='easy'?'로봇A':diff==='medium'?'로봇A/B':'로봇B'} 대국`);
+}
+function closeModal() { document.getElementById('resultModal').classList.remove('show'); }
+document.getElementById('speed').oninput = e => {
+  aiDelay = +e.target.value;
+  document.getElementById('speedLabel').textContent = (aiDelay/1000).toFixed(1)+'초';
+};
+</script>
+</body>
+</html>
