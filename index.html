@@ -194,6 +194,7 @@ input[type=range] { width: 140px; height: 28px; }
     <div class="slider-wrap">
       AI 속도: <input type="range" id="speed" min="800" max="4000" value="1800" step="200">
       <span id="speedLabel">1.8초</span>
+      <small style="opacity:0.7">(자동 조절 중)</small>
     </div>
     <div class="log" id="log"></div>
   </div>
@@ -225,6 +226,40 @@ let currentPlayer = 1, gameOver = false, history = [];
 let aiDelay = 1800, aiThinking = false, aiTimeoutId = null;
 let lastMove = null, winLine = null;
 let canvas, ctx;
+
+// 상대 패턴 분석기
+class OpponentAnalyzer {
+  constructor() {
+    this.moveTimes = [];
+    this.openingMoves = [];
+    this.aggression = 0;
+    this.lastPlayerMoveTime = Date.now();
+  }
+  recordPlayerMove(x, y, timeSpent) {
+    this.moveTimes.push(timeSpent);
+    if (this.moveTimes.length > 20) this.moveTimes.shift();
+    if (this.openingMoves.length < 12) this.openingMoves.push({x, y});
+    this.lastPlayerMoveTime = Date.now();
+  }
+  getAverageSpeed() {
+    if (this.moveTimes.length === 0) return 3;
+    return this.moveTimes.reduce((a,b)=>a+b,0) / this.moveTimes.length;
+  }
+  getAIDelay() {
+    const avg = this.getAverageSpeed();
+    // 상대 속도에 맞춰 AI 대기 시간 자동 조절 (ms)
+    if (avg > 7) return 3200 + Math.random()*1200;   // 느린 상대
+    if (avg > 4) return 1800 + Math.random()*800;    // 보통
+    return 900 + Math.random()*500;                  // 빠른 상대
+  }
+  getOpeningStyle() {
+    if (this.openingMoves.length < 4) return "unknown";
+    const center = this.openingMoves.filter(m => Math.abs(m.x-7)<=2 && Math.abs(m.y-7)<=2).length;
+    return center >= 2 ? "center" : "edge";
+  }
+}
+
+let analyzer = new OpponentAnalyzer();
 
 function getRank(s) {
   let r = RANKS[0];
@@ -259,6 +294,7 @@ function initBoard(s) {
   board = Array.from({length:size}, () => Array(size).fill(0));
   history = []; lastMove = null; winLine = null;
   currentPlayer = 1; gameOver = false; aiThinking = false;
+  analyzer = new OpponentAnalyzer();
   if (aiTimeoutId) clearTimeout(aiTimeoutId);
   resizeBoard();
   canvas.onclick = onClick;
@@ -350,13 +386,23 @@ function onClick(e) {
   if (gameOver || currentPlayer !== 1 || aiThinking) return;
   const pos = posFromEvent(e);
   if (!pos || board[pos[0]][pos[1]]) return;
+
+  const now = Date.now();
+  const timeSpent = (now - analyzer.lastPlayerMoveTime) / 1000;
+  analyzer.recordPlayerMove(pos[1], pos[0], timeSpent);
+
   place(pos[0], pos[1], 1);
   if (!gameOver) {
     currentPlayer = 2;
     aiThinking = true;
     setStatus('로봇 생각 중...', true);
     if (aiTimeoutId) clearTimeout(aiTimeoutId);
-    aiTimeoutId = setTimeout(aiMove, aiDelay);
+    // 상대 패턴에 맞춰 자동 속도 조절
+    const dynamicDelay = analyzer.getAIDelay();
+    aiDelay = dynamicDelay;
+    document.getElementById('speed').value = Math.round(dynamicDelay);
+    document.getElementById('speedLabel').textContent = (dynamicDelay/1000).toFixed(1)+'초';
+    aiTimeoutId = setTimeout(aiMove, dynamicDelay);
   }
 }
 
@@ -415,10 +461,11 @@ function aiMove() {
   }
   if (!best) best = moves[Math.floor(Math.random()*Math.min(moves.length, currentDiff==='hard'?6:10))];
   place(best[0], best[1], 2);
-  log('로봇 한 수 둠');
+  log('로봇 한 수 둬');
   if (!gameOver) {
     currentPlayer = 1;
     setStatus('흑 차례');
+    analyzer.lastPlayerMoveTime = Date.now();
   }
 }
 
