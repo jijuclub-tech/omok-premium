@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>명품 오목 - 핸드폰 최적화</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;900&display=swap');
 :root {
   --bg: #0c1a12;
   --gold: #d4af37;
@@ -228,6 +228,11 @@ let lastMove = null, winLine = null;
 let canvas, ctx;
 let gameResult = null; // 'win', 'lose', 'draw'
 
+// 애니메이션 관련
+let overlayAnim = 0; // 0 ~ 1
+let animFrameId = null;
+let animStartTime = 0;
+
 // 상대 패턴 분석기
 class OpponentAnalyzer {
   constructor() {
@@ -248,10 +253,9 @@ class OpponentAnalyzer {
   }
   getAIDelay() {
     const avg = this.getAverageSpeed();
-    // 상대 속도에 맞춰 AI 대기 시간 자동 조절 (ms)
-    if (avg > 7) return 3200 + Math.random()*1200;   // 느린 상대
-    if (avg > 4) return 1800 + Math.random()*800;    // 보통
-    return 900 + Math.random()*500;                  // 빠른 상대
+    if (avg > 7) return 3200 + Math.random()*1200;
+    if (avg > 4) return 1800 + Math.random()*800;
+    return 900 + Math.random()*500;
   }
   getOpeningStyle() {
     if (this.openingMoves.length < 4) return "unknown";
@@ -296,6 +300,9 @@ function initBoard(s) {
   history = []; lastMove = null; winLine = null;
   currentPlayer = 1; gameOver = false; aiThinking = false;
   gameResult = null;
+  overlayAnim = 0;
+  if (animFrameId) cancelAnimationFrame(animFrameId);
+  animFrameId = null;
   analyzer = new OpponentAnalyzer();
   if (aiTimeoutId) clearTimeout(aiTimeoutId);
   resizeBoard();
@@ -303,6 +310,31 @@ function initBoard(s) {
   canvas.ontouchstart = e => { e.preventDefault(); onClick(e.touches[0]); };
   window.addEventListener('resize', resizeBoard);
   window.addEventListener('orientationchange', () => setTimeout(resizeBoard, 300));
+}
+
+function startOverlayAnimation() {
+  overlayAnim = 0;
+  animStartTime = performance.now();
+  if (animFrameId) cancelAnimationFrame(animFrameId);
+  function animate(now) {
+    const elapsed = now - animStartTime;
+    const duration = 900; // ms
+    overlayAnim = Math.min(1, elapsed / duration);
+    draw();
+    if (overlayAnim < 1) {
+      animFrameId = requestAnimationFrame(animate);
+    } else {
+      // 후 연속 펄스 유지
+      function pulse(now2) {
+        draw();
+        if (gameResult && (gameResult === 'win' || gameResult === 'lose')) {
+          animFrameId = requestAnimationFrame(pulse);
+        }
+      }
+      animFrameId = requestAnimationFrame(pulse);
+    }
+  }
+  animFrameId = requestAnimationFrame(animate);
 }
 
 function draw() {
@@ -353,32 +385,40 @@ function draw() {
     ctx.shadowBlur = 0;
   }
 
-  // 승리/패배 오버레이
-  if (gameResult === 'win' || gameResult === 'lose') {
+  // 승리/패배 오버레이 (애니메이션)
+  if ((gameResult === 'win' || gameResult === 'lose') && overlayAnim > 0) {
     const textKr = gameResult === 'win' ? '승' : '패';
     const textEn = gameResult === 'win' ? 'WIN' : 'LOSE';
     const isWin = gameResult === 'win';
 
+    // easeOutBack 스케일
+    const t = overlayAnim;
+    const ease = t < 1 ? 1 - Math.pow(1 - t, 3) : 1;
+    const scale = 0.3 + 0.7 * ease;
+    const alpha = Math.min(1, t * 1.4);
+
+    // 펄스 글로우 (애니 완료 후)
+    const pulse = overlayAnim >= 1 ? 0.7 + 0.3 * Math.sin(performance.now() / 280) : 1;
+    const glow = (isWin ? 28 : 22) * pulse;
+
     ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(w / 2, h / 2 - cell * 0.3);
+    ctx.scale(scale, scale);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const cx = w / 2;
-    const cy = h / 2 - cell * 0.3;
 
-    // Glow effect
     ctx.shadowColor = isWin ? '#fbbf24' : '#ef4444';
-    ctx.shadowBlur = 25;
+    ctx.shadowBlur = glow;
 
-    // Korean character
     ctx.font = `900 ${Math.floor(cell * 2.8)}px 'Noto Sans KR', sans-serif`;
     ctx.fillStyle = isWin ? '#d4af37' : '#dc2626';
-    ctx.fillText(textKr, cx, cy - cell * 0.9);
+    ctx.fillText(textKr, 0, -cell * 0.9);
 
-    // English text
     ctx.font = `800 ${Math.floor(cell * 1.6)}px 'Noto Sans KR', sans-serif`;
     ctx.fillStyle = isWin ? '#2563eb' : '#e5e7eb';
-    ctx.shadowBlur = 12;
-    ctx.fillText(textEn, cx, cy + cell * 0.6);
+    ctx.shadowBlur = glow * 0.6;
+    ctx.fillText(textEn, 0, cell * 0.6);
 
     ctx.restore();
   }
@@ -429,7 +469,6 @@ function onClick(e) {
     aiThinking = true;
     setStatus('로봇 생각 중...', true);
     if (aiTimeoutId) clearTimeout(aiTimeoutId);
-    // 상대 패턴에 맞춰 자동 속도 조절
     const dynamicDelay = analyzer.getAIDelay();
     aiDelay = dynamicDelay;
     document.getElementById('speed').value = Math.round(dynamicDelay);
@@ -541,7 +580,11 @@ function endGame(result) {
   document.getElementById('newRank').textContent = getRank(playerScore).name;
   document.getElementById('resultModal').classList.add('show');
   log(msg);
-  draw(); // 오버레이 다시 그리기
+  if (result === 'win' || result === 'lose') {
+    startOverlayAnimation();
+  } else {
+    draw();
+  }
 }
 
 function setStatus(text, thinking=false) {
@@ -567,6 +610,8 @@ function undo() {
 }
 function resign() { if (!gameOver) endGame('lose'); }
 function showLobby() {
+  if (animFrameId) cancelAnimationFrame(animFrameId);
+  animFrameId = null;
   document.getElementById('lobby').classList.add('active');
   document.getElementById('gameScreen').classList.remove('active');
 }
